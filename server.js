@@ -25,7 +25,16 @@ if (!process.env.SESSION_SECRET) {
     'Définissez SESSION_SECRET dans l\'environnement pour éviter de déconnecter tout le monde à chaque redémarrage.');
 }
 
-const DB_PATH = path.join(__dirname, 'data', 'wafi-crm.db');
+const fs = require('fs');
+
+const DATA_DIR = path.join(__dirname, 'data');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const DB_PATH = path.join(DATA_DIR, 'wafi-crm.db');
+
 const db = new Database(DB_PATH);
 
 db.exec(`

@@ -6,14 +6,23 @@
 //   npm install
 //   node scripts/manage-users.js add alice "un-mot-de-passe-solide"
 //   npm start
-require('dotenv').config();
-const express = require('express');
-const session = require('express-session');
-const bcrypt = require('bcryptjs');
-const path = require('path');
-const Database = require('better-sqlite3');
-const crypto = require('crypto');
 
+
+require("dotenv").config();
+
+const express = require("express");
+const app = express();
+
+const cors = require("cors");
+const session = require("express-session");
+const bcrypt = require("bcryptjs");
+const path = require("path");
+const Database = require("better-sqlite3");
+const crypto = require("crypto");
+app.use(cors({
+  origin: "https://wafi-crm-server-client.vercel.app",
+  credentials: true
+}));
 const PORT = process.env.PORT || 3000;
 
 // En production, définissez SESSION_SECRET dans l'environnement (valeur fixe et secrète).
@@ -51,7 +60,6 @@ db.exec(`
   );
 `);
 
-const app = express();
 app.set('trust proxy', 1); // utile derrière un reverse proxy Nginx/Apache
 app.use(express.json({ limit: '10mb' })); // pièces jointes PDF encodées en base64
 
@@ -61,10 +69,10 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production', // nécessite HTTPS en production
-    maxAge: 12 * 60 * 60 * 1000 // 12 heures
-  }
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 12 * 60 * 60 * 1000,
+}
 }));
 
 function requireAuth(req, res, next) {
@@ -74,6 +82,13 @@ function requireAuth(req, res, next) {
   }
   return res.redirect('/login.html');
 }
+
+app.get("/", (req, res) => {
+    res.json({
+        status: "OK",
+        service: "WAFI CRM Backend",
+    });
+});
 
 // --- Authentification ---
 
@@ -100,8 +115,6 @@ app.get('/api/me', (req, res) => {
   res.json({ username: req.session.username });
 });
 
-// Sert la page de connexion sans authentification préalable
-app.use('/login.html', express.static(path.join(__dirname, 'public', 'login.html')));
 
 // --- À partir d'ici, tout nécessite une session valide ---
 app.use(requireAuth);
@@ -137,19 +150,7 @@ app.get('/api/storage', (req, res) => {
   res.json({ keys: rows.map(r => r.key), prefix });
 });
 
-// --- Sert l'application React compilée (dossier public-app, généré par `npm run build` dans /client) ---
-// protégée par requireAuth ci-dessus
-const CLIENT_BUILD_DIR = path.join(__dirname, 'public-app');
-app.use(express.static(CLIENT_BUILD_DIR));
-app.get('/', (req, res) => {
-  res.sendFile(path.join(CLIENT_BUILD_DIR, 'index.html'), (err) => {
-    if (err) {
-      res.status(500).send(
-        "Le client React n'a pas été compilé. Depuis le dossier client/, exécutez : npm install && npm run build"
-      );
-    }
-  });
-});
+
 
 app.listen(PORT, () => {
   console.log(`Registre WAFI CAPITAL disponible sur http://localhost:${PORT}`);

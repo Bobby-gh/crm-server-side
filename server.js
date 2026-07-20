@@ -80,18 +80,28 @@ if (!process.env.SESSION_SECRET) {
 
 const fs = require('fs');
 
-const DATA_DIR = path.join(__dirname, 'data');
-const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+function resolveDatabasePaths() {
+  const legacyDbPath = path.join(__dirname, 'data', 'wafi-crm.db');
+  const configuredDbPath = process.env.DB_PATH || process.env.DATABASE_PATH || (process.env.RAILWAY_VOLUME_MOUNT_PATH ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'wafi-crm.db') : null);
+  const dbPath = configuredDbPath || legacyDbPath;
+  const dataDir = path.dirname(dbPath);
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  if (configuredDbPath && legacyDbPath !== configuredDbPath && fs.existsSync(legacyDbPath) && !fs.existsSync(configuredDbPath)) {
+    fs.copyFileSync(legacyDbPath, configuredDbPath);
+    console.log(`📦 Migrated existing database from ${legacyDbPath} to ${configuredDbPath}`);
+  }
+
+  const backupDir = path.join(dataDir, 'backups');
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+
+  return { dataDir, backupDir, dbPath };
 }
 
-if (!fs.existsSync(BACKUP_DIR)) {
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
-}
-
-const DB_PATH = path.join(DATA_DIR, 'wafi-crm.db');
+const { dataDir: DATA_DIR, backupDir: BACKUP_DIR, dbPath: DB_PATH } = resolveDatabasePaths();
 
 const db = new Database(DB_PATH);
 
@@ -212,12 +222,13 @@ app.get("/", (req, res) => {
 // --- Authentification ---
 
 app.post('/api/login', (req, res) => {
-  const { username, password } = req.body || {};
-  const normalizedUsername = typeof username === 'string' ? username.trim() : '';
-  if (!normalizedUsername || !password) {
+  const { username, email, password } = req.body || {};
+  const loginIdentifier = typeof username === 'string' ? username : typeof email === 'string' ? email : '';
+  const normalizedIdentifier = typeof loginIdentifier === 'string' ? loginIdentifier.trim().toLowerCase() : '';
+  if (!normalizedIdentifier || !password) {
     return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
   }
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(normalizedUsername);
+  const user = db.prepare('SELECT * FROM users WHERE lower(username) = ? OR lower(email) = ?').get(normalizedIdentifier, normalizedIdentifier);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
   }

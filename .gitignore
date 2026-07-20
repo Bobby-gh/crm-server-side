@@ -1,0 +1,7 @@
+node_modules/
+client/node_modules/
+public-app/
+data/*.db
+data/*.db-journal
+.env
+

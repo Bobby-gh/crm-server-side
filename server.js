@@ -76,11 +76,14 @@ app.use(session({
 }));
 
 function requireAuth(req, res, next) {
-  if (req.session && req.session.userId) return next();
-  if (req.path.startsWith('/api/')) {
-    return res.status(401).json({ error: 'Non authentifié' });
+  if (req.session && req.session.userId) {
+    return next();
   }
-  return res.redirect('/login.html');
+
+  return res.status(401).json({
+    success: false,
+    error: "Unauthorized",
+  });
 }
 
 app.get("/", (req, res) => {

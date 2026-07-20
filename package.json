@@ -4,10 +4,12 @@
   "description": "Registre des Demandes Clientèle WAFI CAPITAL — serveur auto-hébergé avec base de données SQLite",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "backup:monthly": "node scripts/backup-monthly.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "node-cron": "^4.0.9",
     "better-sqlite3": "^11.3.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

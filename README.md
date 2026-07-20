@@ -1,141 +1,91 @@
-# Registre des Demandes Clientèle — WAFI CAPITAL (version auto-hébergée, React)
+# Customer Request Log — WAFI CAPITAL (self-hosted version, React)
 
-Cette version remplace le stockage propre à Claude.ai par un vrai serveur
-web (Node.js / Express), une base de données SQLite locale, une
-authentification par identifiant/mot de passe, et une interface **React**
-(compilée avec Vite). Vous pouvez l'installer sur n'importe quel serveur
-(VPS, serveur interne, hébergement Node.js).
+This version replaces Claude.ai-specific storage with a real web server
+(Node.js / Express), a local SQLite database, username/password authentication,
+and a **React** interface (built with Vite). You can install it on any server
+(VPS, internal server, Node.js hosting).
 
-## Contenu
+## Contents
 
 ```
 wafi-crm-server/
-├── server.js          → serveur Express : API de stockage, authentification
-├── package.json        → dépendances du serveur
-├── public/
-│   └── login.html      → page de connexion (servie sans authentification)
-├── public-app/          → build React généré par `npm run build` (à ne pas éditer à la main)
-├── client/               → code source de l'interface React
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── index.html
-│   └── src/
-│       ├── main.jsx
-│       ├── App.jsx      → le composant CRM (registre, dossiers, tableau de bord)
-│       └── index.css
+├── server.js          → Express server: storage API, authentication
+├── package.json        → server dependencies
 ├── scripts/
-│   └── manage-users.js  → gestion des comptes utilisateurs
+│   └── manage-users.js  → user account management
 └── data/
-    └── wafi-crm.db      → base de données SQLite (créée automatiquement)
+    └── wafi-crm.db      → SQLite database (created automatically)
 ```
 
 ## Installation
 
-Prérequis : Node.js 18 ou plus récent (https://nodejs.org).
+Prerequisite: Node.js 18 or newer (https://nodejs.org).
 
-### 1. Installer et compiler l'interface React
-
-```bash
-cd client
-npm install
-npm run build
-cd ..
-```
-
-Cette étape génère le dossier `public-app/` — c'est ce que le serveur sert
-une fois l'utilisateur connecté. Il faut relancer `npm run build` à chaque
-modification du code React (dans `client/src/`).
-
-### 2. Installer le serveur
+### 1. Install the server
 
 ```bash
 npm install
 ```
 
-### 3. Créer les comptes utilisateurs
+### 3. Create user accounts
 
-Chaque utilisateur a son propre identifiant et mot de passe. Il n'y a pas
-d'inscription libre : c'est vous (l'administrateur) qui créez les comptes
-en ligne de commande.
+Each user has their own username and password. New accounts can be created
+through the signup page at `/signup` or via the API endpoint `/api/signup`.
+The CLI helper remains available for administration tasks.
 
 ```bash
-node scripts/manage-users.js add alice "un-mot-de-passe-solide"
-node scripts/manage-users.js add bakary "un-autre-mot-de-passe"
+node scripts/manage-users.js add alice "a-strong-password"
 node scripts/manage-users.js list
 node scripts/manage-users.js remove alice
 ```
 
-Le mot de passe doit contenir au moins 8 caractères. Relancer `add` avec un
-identifiant existant met simplement à jour son mot de passe.
+Passwords must be at least 8 characters long. Running `add` again with an
+existing username simply updates that user's password.
 
-### 4. Démarrer le serveur
+### 4. Start the server
 
 ```bash
 npm start
 ```
 
-L'outil est alors accessible à l'adresse `http://localhost:3000` — il
-redirige automatiquement vers la page de connexion si vous n'êtes pas
-identifié.
+The API is then available at `http://localhost:3000`.
 
-La base de données SQLite (`data/wafi-crm.db`) est créée automatiquement
-au premier démarrage — elle contient à la fois les dossiers clients et les
-comptes utilisateurs. C'est un simple fichier — pensez à l'inclure dans
-vos sauvegardes régulières.
+The SQLite database file (`data/wafi-crm.db`) is created automatically on
+the first startup — it contains both customer records and user accounts.
+It is a single file, so remember to include it in your regular backups.
 
-### Développement de l'interface React (optionnel)
+### Important environment variable: SESSION_SECRET
 
-Pour modifier l'interface avec rechargement instantané pendant le
-développement, lancez le serveur (`npm start` à la racine) puis, dans un
-second terminal :
+Set a fixed secret value to keep users logged in across server restarts:
 
 ```bash
-cd client
-npm run dev
+SESSION_SECRET="a-long-random-secret-string" npm start
 ```
 
-Vite démarre alors sur `http://localhost:5173` et redirige automatiquement
-les appels `/api/*` vers le serveur Express. Une fois vos changements
-terminés, pensez à relancer `npm run build` pour générer la version de
-production servie par le serveur.
+Without this variable, a temporary value is generated at each startup and
+all users are logged out when the server restarts.
 
-### Variable d'environnement importante : SESSION_SECRET
+## Production deployment
 
-Définissez une valeur secrète fixe pour garder tout le monde connecté
-d'un redémarrage à l'autre du serveur :
-
-```bash
-SESSION_SECRET="une-longue-chaine-aleatoire-et-secrete" npm start
-```
-
-Sans cette variable, une valeur temporaire est générée à chaque
-démarrage et tous les utilisateurs sont déconnectés à chaque redémarrage
-du serveur.
-
-## Déploiement sur un serveur (production)
-
-1. Copiez le dossier `wafi-crm-server` sur votre serveur.
-2. Installez les dépendances : `npm install --production`
-3. Gardez le processus actif en permanence avec un gestionnaire de
-   processus, par exemple [PM2](https://pm2.keymetrics.io/) :
+1. Copy the `wafi-crm-server` folder to your server.
+2. Install dependencies: `npm install --production`
+3. Keep the process running with a process manager, for example [PM2](https://pm2.keymetrics.io/):
    ```bash
    npm install -g pm2
    pm2 start server.js --name wafi-crm
    pm2 save
    pm2 startup
    ```
-4. Placez un serveur web (Nginx, Apache) devant l'application en reverse
-   proxy, avec un certificat HTTPS (par exemple via Let's Encrypt /
-   Certbot). Exemple de configuration Nginx minimale :
+4. Put a web server (Nginx, Apache) in front of the application as a reverse
+   proxy, with an HTTPS certificate (for example using Let's Encrypt /
+   Certbot). Minimal Nginx configuration example:
    ```nginx
    server {
      listen 443 ssl;
-     server_name crm.wafi-votre-domaine.com;
+     server_name crm.wafi-your-domain.com;
 
-     ssl_certificate     /etc/letsencrypt/live/votre-domaine/fullchain.pem;
-     ssl_certificate_key /etc/letsencrypt/live/votre-domaine/privkey.pem;
+     ssl_certificate     /etc/letsencrypt/live/your-domain/fullchain.pem;
+     ssl_certificate_key /etc/letsencrypt/live/your-domain/privkey.pem;
 
      location / {
        proxy_pass http://localhost:3000;
@@ -145,40 +95,35 @@ du serveur.
    }
    ```
 
-**Ne déployez pas ce serveur derrière HTTP simple sur Internet** : les
-données clients (contacts, échanges, pièces jointes) transiteraient en
-clair. Le HTTPS est indispensable dès que l'outil sort de votre réseau
-local.
+**Do not deploy this server over plain HTTP on the public Internet**: client
+data (contacts, exchanges, attachments) would travel in clear text. HTTPS is
+required once the tool leaves your local network.
 
-## Sécurité — accès à l'outil
+## Security — access to the tool
 
-Chaque utilisateur se connecte désormais avec son propre identifiant et
-mot de passe (voir « Créer les comptes utilisateurs » ci-dessus). Les mots
-de passe sont stockés chiffrés (bcrypt), jamais en clair.
+Each user now logs in with their own username and password (see "Create
+user accounts" above). Passwords are stored encrypted with bcrypt, never as
+plain text.
 
-Quelques recommandations complémentaires :
+Additional recommendations:
 
-- **HTTPS obligatoire en production** (voir section précédente) : sans
-  cela, les identifiants et mots de passe circuleraient en clair sur le
-  réseau.
-- **Un compte par personne**, pas de compte partagé — cela permet de
-  savoir qui a créé ou modifié chaque dossier si besoin, et de retirer
-  l'accès d'une seule personne sans toucher aux autres.
-- **Session de 12 heures** : au-delà, l'utilisateur doit se reconnecter.
-  Ce délai se règle dans `server.js` (`cookie.maxAge`).
-- Cette version reste une authentification simple (pas de rôles
-  différenciés, pas de réinitialisation de mot de passe en libre-service,
-  pas de journal des connexions). Si vous avez besoin de l'un de ces
-  éléments, revenez vers Claude pour les ajouter.
+- **HTTPS is mandatory in production** (see the previous section): without it,
+  usernames and passwords would travel unencrypted over the network.
+- **One account per person**, not shared accounts — this allows you to know
+  who created or modified each record if needed, and to revoke access for one
+  person without affecting others.
+- **12-hour session lifetime**: after that, users must log in again. This can
+  be adjusted in `server.js` (`cookie.maxAge`).
+- This version remains a simple authentication setup (no separate roles, no
+  self-service password reset, no login audit log). If you need any of those
+  features, return to Claude to add them.
 
-## Sauvegardes
+## Backups
 
-Le fichier `data/wafi-crm.db` contient l'intégralité des données
-(dossiers, échanges, pièces jointes PDF encodées). Sauvegardez-le
-régulièrement (copie automatisée quotidienne recommandée).
+The file `data/wafi-crm.db` contains all data (records, exchanges, PDF
+attachments encoded as base64). Back it up regularly (daily automated copy
+recommended).
 
-## Mise à jour de l'outil
+## Updating the tool
 
-Pour modifier l'interface (`public/index.html`), vous pouvez revenir vers
-Claude avec vos demandes de changement, comme pour la version Claude.ai —
-il suffit ensuite de redéployer le fichier mis à jour sur le serveur.
+This backend serves the API and authentication layer only.

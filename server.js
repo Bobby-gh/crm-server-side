@@ -20,15 +20,39 @@ const path = require("path");
 const Database = require("better-sqlite3");
 const crypto = require("crypto");
 
+const envAllowedOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
 const ALLOWED_ORIGINS = [
-  "https://wafi-crm-server-client.vercel.app",
-  "http://localhost:3000",
-  "http://localhost:5173"
+  ...new Set([
+    ...envAllowedOrigins,
+    "https://wafi-crm-server-client.vercel.app",
+    "https://*.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173"
+  ])
 ];
 
-app.use(cors({
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  return ALLOWED_ORIGINS.some((allowedOrigin) => {
+    if (allowedOrigin === origin) return true;
+    if (!allowedOrigin.includes("*")) return false;
+
+    const escapedPattern = allowedOrigin
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\\\*/g, ".*");
+    const regex = new RegExp(`^${escapedPattern}$`);
+    return regex.test(origin);
+  });
+}
+
+const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
@@ -36,8 +60,11 @@ app.use(cors({
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-auth-token"]
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const isProduction = process.env.NODE_ENV === "production";
@@ -265,9 +292,9 @@ app.put('/api/storage/:key', requireAuth, (req, res) => {
 
   const existing = db.prepare('SELECT key FROM kv_store WHERE key = ? AND user_id = ?').get(req.params.key, req.user.id);
   if (existing) {
-    db.prepare('UPDATE kv_store SET value = ?, updated_at = datetime("now") WHERE key = ? AND user_id = ?').run(value, req.params.key, req.user.id);
+    db.prepare('UPDATE kv_store SET value = ?, updated_at = datetime(\'now\') WHERE key = ? AND user_id = ?').run(value, req.params.key, req.user.id);
   } else {
-    db.prepare('INSERT INTO kv_store (key, value, user_id, updated_at) VALUES (?, ?, ?, datetime("now"))').run(req.params.key, value, req.user.id);
+    db.prepare('INSERT INTO kv_store (key, value, user_id, updated_at) VALUES (?, ?, ?, datetime(\'now\'))').run(req.params.key, value, req.user.id);
   }
 
   res.json({ key: req.params.key, value });

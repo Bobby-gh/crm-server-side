@@ -21,7 +21,9 @@ const Database = require("better-sqlite3");
 const crypto = require("crypto");
 app.use(cors({
   origin: "https://wafi-crm-server-client.vercel.app",
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
 }));
 const PORT = process.env.PORT || 3000;
 
@@ -68,10 +70,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    maxAge: 12 * 60 * 60 * 1000,
+  httpOnly: true,
+  secure: true,
+  sameSite: "none",
+  maxAge: 12 * 60 * 60 * 1000,
 }
 }));
 

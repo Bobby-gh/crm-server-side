@@ -119,7 +119,7 @@ Error responses:
 - 401: missing/invalid token
 
 ### GET /api/storage/:key
-Fetch a storage value for the authenticated user.
+Fetch a storage value for the authenticated user. Admin users can fetch any user's stored value and receive ownership details.
 
 Headers:
 ```http
@@ -130,7 +130,10 @@ Success response (200):
 ```json
 {
   "key": "customers",
-  "value": "some-string-value"
+  "value": "some-string-value",
+  "userId": 1,
+  "username": "alice",
+  "updatedAt": "2026-08-25 12:00:00"
 }
 ```
 
@@ -155,7 +158,7 @@ Success response (200):
 ```
 
 ### GET /api/storage
-List storage keys for the authenticated user with an optional prefix filter.
+List storage keys for the authenticated user with an optional prefix filter. Admin users receive every stored record plus ownership details.
 
 Headers:
 ```http
@@ -174,12 +177,22 @@ Success response (200):
 ```json
 {
   "keys": ["customer:1", "customer:2"],
-  "prefix": "customer"
+  "prefix": "customer",
+  "scope": "all",
+  "records": [
+    {
+      "key": "customer:1",
+      "value": "...",
+      "userId": 1,
+      "username": "alice",
+      "updatedAt": "2026-08-25 12:00:00"
+    }
+  ]
 }
 ```
 
 ### GET /api/storage/keys
-List all storage keys created by the authenticated user.
+List all storage keys created by the authenticated user. Admin users receive every stored key plus record details.
 
 Headers:
 ```http
@@ -189,7 +202,17 @@ Authorization: Bearer <token>
 Success response (200):
 ```json
 {
-  "keys": ["customer:1", "customer:2", "notes"]
+  "keys": ["customer:1", "customer:2", "notes"],
+  "scope": "all",
+  "records": [
+    {
+      "key": "customer:1",
+      "value": "...",
+      "userId": 1,
+      "username": "alice",
+      "updatedAt": "2026-08-25 12:00:00"
+    }
+  ]
 }
 ```
 

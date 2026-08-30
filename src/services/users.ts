@@ -1,49 +1,37 @@
-const { generateTemporaryPassword, hashPassword, verifyPassword } = require('./passwords');
-const { createOrganization } = require('./organizations');
+import { DataSource, Repository } from 'typeorm';
+import { User, PublicUser, toPublicUser } from '../entities/User';
 
-function toPublicUser(user) {
-  if (!user) {
-    return null;
-  }
+export { PublicUser, toPublicUser } from '../entities/User';
 
-  return {
-    id: user.id,
-    username: user.username,
-    email: user.email || null,
-    organizationId: user.organizationId || null,
-    isAdmin: Boolean(user.isAdmin),
-    mustChangePassword: Boolean(user.mustChangePassword),
-    createdByUserId: user.createdByUserId || null,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-    passwordChangedAt: user.passwordChangedAt || null
-  };
+
+import { generateTemporaryPassword, hashPassword, verifyPassword } from './passwords';
+import { createOrganization } from './organizations';
+import { Organization } from '../entities/Organization';
+
+function userRepository(dataSource: DataSource): Repository<User> {
+  return dataSource.getRepository(User);
 }
 
-function userRepository(dataSource) {
-  return dataSource.getRepository('User');
-}
-
-async function countUsers(dataSource) {
+export async function countUsers(dataSource: DataSource): Promise<number> {
   return userRepository(dataSource).count();
 }
 
-async function getUserById(dataSource, userId) {
+export async function getUserById(dataSource: DataSource, userId: number): Promise<PublicUser | null> {
   const user = await userRepository(dataSource).findOne({ where: { id: userId } });
   return toPublicUser(user);
 }
 
-async function getUserByIdentifier(dataSource, identifier) {
+export async function getUserByIdentifier(dataSource: DataSource, identifier: string): Promise<PublicUser | null> {
   const user = await userRepository(dataSource)
     .createQueryBuilder('user')
     .where('LOWER(user.username) = LOWER(:identifier)', { identifier })
-    .orWhere('LOWER(COALESCE(user.email, \'\')) = LOWER(:identifier)', { identifier })
+    .orWhere("LOWER(COALESCE(user.email, '')) = LOWER(:identifier)", { identifier })
     .getOne();
 
   return toPublicUser(user);
 }
 
-async function listUsers(dataSource, organizationId) {
+export async function listUsers(dataSource: DataSource, organizationId: number): Promise<PublicUser[]> {
   const users = await userRepository(dataSource).find({
     where: {
       organizationId
@@ -53,10 +41,23 @@ async function listUsers(dataSource, organizationId) {
     }
   });
 
-  return users.map(toPublicUser);
+  return users.map((u) => toPublicUser(u)!);
 }
 
-async function createInitialAdmin(dataSource, { username, email, password, organizationName }) {
+export async function createInitialAdmin(
+  dataSource: DataSource,
+  {
+    username,
+    email,
+    password,
+    organizationName
+  }: {
+    username: string;
+    email: string | null;
+    password: string;
+    organizationName: string;
+  }
+): Promise<{ organization: any; user: PublicUser }> {
   const organization = await createOrganization(dataSource, {
     name: organizationName || username,
     createdByUserId: null
@@ -75,7 +76,7 @@ async function createInitialAdmin(dataSource, { username, email, password, organ
   });
 
   const user = await repository.save(entity);
-  await dataSource.getRepository('Organization').update(
+  await dataSource.getRepository(Organization).update(
     { id: organization.id },
     { createdByUserId: user.id }
   );
@@ -84,11 +85,24 @@ async function createInitialAdmin(dataSource, { username, email, password, organ
 
   return {
     organization,
-    user: toPublicUser(user)
+    user: toPublicUser(user)!
   };
 }
 
-async function createUserWithTemporaryPassword(dataSource, { username, email, createdByUserId, organizationId }) {
+export async function createUserWithTemporaryPassword(
+  dataSource: DataSource,
+  {
+    username,
+    email,
+    createdByUserId,
+    organizationId
+  }: {
+    username: string;
+    email: string | null;
+    createdByUserId: number;
+    organizationId: number;
+  }
+): Promise<{ user: PublicUser; temporaryPassword: string }> {
   const repository = userRepository(dataSource);
   const temporaryPassword = generateTemporaryPassword();
   const entity = repository.create({
@@ -104,12 +118,23 @@ async function createUserWithTemporaryPassword(dataSource, { username, email, cr
 
   const user = await repository.save(entity);
   return {
-    user: toPublicUser(user),
+    user: toPublicUser(user)!,
     temporaryPassword
   };
 }
 
-async function changePassword(dataSource, { userId, currentPassword, newPassword }) {
+export async function changePassword(
+  dataSource: DataSource,
+  {
+    userId,
+    currentPassword,
+    newPassword
+  }: {
+    userId: number;
+    currentPassword: string;
+    newPassword: string;
+  }
+): Promise<{ success: boolean; reason?: string }> {
   const repository = userRepository(dataSource);
   const user = await repository.findOne({ where: { id: userId } });
 
@@ -129,11 +154,15 @@ async function changePassword(dataSource, { userId, currentPassword, newPassword
   return { success: true };
 }
 
-async function verifyUserPassword(dataSource, identifier, password) {
+export async function verifyUserPassword(
+  dataSource: DataSource,
+  identifier: string,
+  password: string
+): Promise<PublicUser | null> {
   const user = await userRepository(dataSource)
     .createQueryBuilder('user')
     .where('LOWER(user.username) = LOWER(:identifier)', { identifier })
-    .orWhere('LOWER(COALESCE(user.email, \'\')) = LOWER(:identifier)', { identifier })
+    .orWhere("LOWER(COALESCE(user.email, '')) = LOWER(:identifier)", { identifier })
     .getOne();
 
   if (!user) {
@@ -147,25 +176,15 @@ async function verifyUserPassword(dataSource, identifier, password) {
   return toPublicUser(user);
 }
 
-async function getUserRecordByIdentifier(dataSource, identifier) {
+export async function getUserRecordByIdentifier(
+  dataSource: DataSource,
+  identifier: string
+): Promise<User | null> {
   const user = await userRepository(dataSource)
     .createQueryBuilder('user')
     .where('LOWER(user.username) = LOWER(:identifier)', { identifier })
-    .orWhere('LOWER(COALESCE(user.email, \'\')) = LOWER(:identifier)', { identifier })
+    .orWhere("LOWER(COALESCE(user.email, '')) = LOWER(:identifier)", { identifier })
     .getOne();
 
   return user || null;
 }
-
-module.exports = {
-  changePassword,
-  countUsers,
-  createInitialAdmin,
-  createUserWithTemporaryPassword,
-  getUserById,
-  getUserByIdentifier,
-  getUserRecordByIdentifier,
-  listUsers,
-  toPublicUser,
-  verifyUserPassword
-};

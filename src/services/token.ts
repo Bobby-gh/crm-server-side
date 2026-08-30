@@ -1,8 +1,14 @@
-const crypto = require('crypto');
-const { SESSION_SECRET } = require('../config/runtime');
+import crypto from 'crypto';
+import { SESSION_SECRET } from '../config/runtime';
 
-function createAuthToken(user) {
-  const payload = {
+interface AuthTokenPayload {
+  sub: number;
+  username: string;
+  exp: number;
+}
+
+export function createAuthToken(user: { id: number; username: string }): string {
+  const payload: AuthTokenPayload = {
     sub: user.id,
     username: user.username,
     exp: Date.now() + 12 * 60 * 60 * 1000
@@ -13,7 +19,7 @@ function createAuthToken(user) {
   return `${encodedPayload}.${signature}`;
 }
 
-function parseAuthToken(token) {
+export function parseAuthToken(token: string | null | undefined): AuthTokenPayload | null {
   if (typeof token !== 'string') {
     return null;
   }
@@ -30,18 +36,13 @@ function parseAuthToken(token) {
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+    const payload: AuthTokenPayload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
     if (!payload || typeof payload.sub !== 'number' || payload.exp <= Date.now()) {
       return null;
     }
 
     return payload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
-
-module.exports = {
-  createAuthToken,
-  parseAuthToken
-};

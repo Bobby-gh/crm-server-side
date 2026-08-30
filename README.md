@@ -1,129 +1,142 @@
-# Customer Request Log — WAFI CAPITAL (self-hosted version, React)
+# WAFI CAPITAL CRM Server
 
-This version replaces Claude.ai-specific storage with a real web server
-(Node.js / Express), a local SQLite database, username/password authentication,
-and a **React** interface (built with Vite). You can install it on any server
-(VPS, internal server, Node.js hosting).
+Self-hosted customer request management backend built with **TypeScript**, **Express**, **TypeORM**, and **PostgreSQL**.
 
-## Contents
+Multi-tenant: every organization has its own isolated data. Users manage customer requests (applications) with full status tracking, exchange history, and document attachments.
 
-```
-wafi-crm-server/
-├── server.js          → Express server: storage API, authentication
-├── package.json        → server dependencies
-├── scripts/
-│   └── manage-users.js  → user account management
-└── data/
-    └── wafi-crm.db      → SQLite database (created automatically)
-```
+## Quick Start
 
-## Installation
+### Prerequisites
 
-Prerequisite: Node.js 18 or newer (https://nodejs.org).
+- Node.js 18+
+- PostgreSQL 12+
 
-### 1. Install the server
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Create user accounts
-
-Each user has their own username and password. New accounts can be created
-through the signup page at `/signup` or via the API endpoint `/api/signup`.
-The CLI helper remains available for administration tasks.
+### 2. Configure environment
 
 ```bash
-node scripts/manage-users.js add alice "a-strong-password"
-node scripts/manage-users.js list
-node scripts/manage-users.js remove alice
+cp .env.example .env
+# Edit .env with your PostgreSQL connection string and session secret
 ```
 
-Passwords must be at least 8 characters long. Running `add` again with an
-existing username simply updates that user's password.
-
-### 4. Start the server
+### 3. Build and start
 
 ```bash
-npm start
+npm run build    # Compile TypeScript
+npm start        # Start production server
 ```
 
-The API is then available at `http://localhost:3000`.
-
-The SQLite database file (`data/wafi-crm.db`) is created automatically on
-the first startup — it contains both customer records and user accounts.
-It is a single file, so remember to include it in your regular backups.
-
-### Important environment variable: SESSION_SECRET
-
-Set a fixed secret value to keep users logged in across server restarts:
+Or for development:
 
 ```bash
-SESSION_SECRET="a-long-random-secret-string" npm start
+npm run dev      # Run with ts-node (auto-reload not included)
 ```
 
-Without this variable, a temporary value is generated at each startup and
-all users are logged out when the server restarts.
+The API is available at `http://localhost:3000`.
 
-## Production deployment
+### 4. Create the first account
 
-1. Copy the `wafi-crm-server` folder to your server.
-2. Install dependencies: `npm install --production`
-3. Keep the process running with a process manager, for example [PM2](https://pm2.keymetrics.io/):
-   ```bash
-   npm install -g pm2
-   pm2 start server.js --name wafi-crm
-   pm2 save
-   pm2 startup
-   ```
-4. Put a web server (Nginx, Apache) in front of the application as a reverse
-   proxy, with an HTTPS certificate (for example using Let's Encrypt /
-   Certbot). Minimal Nginx configuration example:
-   ```nginx
-   server {
-     listen 443 ssl;
-     server_name crm.wafi-your-domain.com;
+```bash
+curl -X POST http://localhost:3000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"securepass123","email":"admin@example.com","organizationName":"My Company"}'
+```
 
-     ssl_certificate     /etc/letsencrypt/live/your-domain/fullchain.pem;
-     ssl_certificate_key /etc/letsencrypt/live/your-domain/privkey.pem;
+This creates the first admin user and organization. All subsequent users are created by the admin via `POST /api/users`.
 
-     location / {
-       proxy_pass http://localhost:3000;
-       proxy_set_header Host $host;
-       proxy_set_header X-Real-IP $remote_addr;
-     }
-   }
-   ```
+## Project Structure
 
-**Do not deploy this server over plain HTTP on the public Internet**: client
-data (contacts, exchanges, attachments) would travel in clear text. HTTPS is
-required once the tool leaves your local network.
+```
+src/
+├── server.ts              Entry point
+├── app.ts                 Express routes and middleware
+├── data-source.ts         TypeORM data source (PostgreSQL)
+├── config/
+│   └── runtime.ts         Environment variables
+├── entities/
+│   ├── User.ts            User entity
+│   ├── Organization.ts    Organization entity
+│   └── StorageRecord.ts   Key-value storage entity + Application types
+├── services/
+│   ├── users.ts           User CRUD, auth helpers
+│   ├── organizations.ts   Organization CRUD
+│   ├── storage.ts         Storage CRUD with filtering
+│   ├── token.ts           HMAC token creation/parsing
+│   └── passwords.ts       Bcrypt hashing
+├── middleware/
+│   └── auth.ts            Authentication and authorization
+└── db/
+    └── schema.ts          Raw SQL migrations
+```
 
-## Security — access to the tool
+## Available Scripts
 
-Each user now logs in with their own username and password (see "Create
-user accounts" above). Passwords are stored encrypted with bcrypt, never as
-plain text.
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm start` | Run compiled server from `dist/` |
+| `npm run dev` | Run with `tsx` (development) |
+| `npm run typecheck` | Type-check without emitting |
 
-Additional recommendations:
+## Environment Variables
 
-- **HTTPS is mandatory in production** (see the previous section): without it,
-  usernames and passwords would travel unencrypted over the network.
-- **One account per person**, not shared accounts — this allows you to know
-  who created or modified each record if needed, and to revoke access for one
-  person without affecting others.
-- **12-hour session lifetime**: after that, users must log in again. This can
-  be adjusted in `server.js` (`cookie.maxAge`).
-- This version remains a simple authentication setup (no separate roles, no
-  self-service password reset, no login audit log). If you need any of those
-  features, return to Claude to add them.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `SESSION_SECRET` | Yes | Secret for signing auth tokens |
+| `PORT` | No | Server port (default: 3000) |
+| `HOST` | No | Bind address (default: 0.0.0.0) |
+| `NODE_ENV` | No | Set to `production` for secure cookies |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins |
 
-## Backups
+## API Overview
 
-The file `data/wafi-crm.db` contains all data (records, exchanges, PDF
-attachments encoded as base64). Back it up regularly (daily automated copy
-recommended).
+See [API.md](./API.md) for full documentation.
 
-## Updating the tool
+- `POST /api/signup` — Create organization + admin
+- `POST /api/login` — Authenticate, get token
+- `POST /api/auth/change-password` — Change password (required on first login for invited users)
+- `GET /api/me` — Get current user
+- `GET/POST /api/users` — List/create users (admin only)
+- `PUT/GET/DELETE /api/storage/:key` — CRUD for applications
+- `GET /api/storage` — List applications (with status/search filters)
 
-This backend serves the API and authentication layer only.
+## Production Deployment
+
+1. Build: `npm run build`
+2. Set `NODE_ENV=production` and a strong `SESSION_SECRET`
+3. Run with a process manager:
+
+```bash
+npm install -g pm2
+pm2 start dist/server.js --name wafi-crm
+pm2 save
+pm2 startup
+```
+
+4. Put Nginx or Caddy in front with HTTPS:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name crm.your-domain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/your-domain/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**HTTPS is required in production.** User credentials and customer data travel in plaintext over HTTP.

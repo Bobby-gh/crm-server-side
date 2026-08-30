@@ -1,8 +1,11 @@
-function organizationRepository(dataSource) {
-  return dataSource.getRepository('Organization');
+import { DataSource, Repository } from 'typeorm';
+import { Organization, PublicOrganization, toPublicOrganization } from '../entities/Organization';
+
+function organizationRepository(dataSource: DataSource): Repository<Organization> {
+  return dataSource.getRepository(Organization);
 }
 
-function slugify(value) {
+function slugify(value: string): string {
   return String(value || '')
     .trim()
     .toLowerCase()
@@ -10,22 +13,10 @@ function slugify(value) {
     .replace(/^-+|-+$/g, '') || 'organization';
 }
 
-function toPublicOrganization(organization) {
-  if (!organization) {
-    return null;
-  }
-
-  return {
-    id: organization.id,
-    name: organization.name,
-    slug: organization.slug,
-    createdByUserId: organization.createdByUserId || null,
-    createdAt: organization.createdAt,
-    updatedAt: organization.updatedAt
-  };
-}
-
-async function createOrganization(dataSource, { name, createdByUserId }) {
+export async function createOrganization(
+  dataSource: DataSource,
+  { name, createdByUserId }: { name: string; createdByUserId: number | null }
+): Promise<PublicOrganization> {
   const repository = organizationRepository(dataSource);
   const baseName = typeof name === 'string' && name.trim() ? name.trim() : 'Organization';
   const baseSlug = slugify(baseName);
@@ -44,16 +35,13 @@ async function createOrganization(dataSource, { name, createdByUserId }) {
   });
 
   const saved = await repository.save(organization);
-  return toPublicOrganization(saved);
+  return toPublicOrganization(saved)!;
 }
 
-async function getOrganizationById(dataSource, organizationId) {
+export async function getOrganizationById(
+  dataSource: DataSource,
+  organizationId: number
+): Promise<PublicOrganization | null> {
   const organization = await organizationRepository(dataSource).findOne({ where: { id: organizationId } });
   return toPublicOrganization(organization);
 }
-
-module.exports = {
-  createOrganization,
-  getOrganizationById,
-  toPublicOrganization
-};

@@ -10,6 +10,15 @@ import {
   requirePasswordChanged,
   AuthenticatedRequest
 } from './middleware/auth';
+import {
+  validate,
+  signupSchema,
+  loginSchema,
+  changePasswordSchema,
+  createUserSchema,
+  storagePutSchema,
+  storageQuerySchema,
+} from './middleware/validate';
 import { createAuthToken } from './services/token';
 import { verifyPassword } from './services/passwords';
 import {
@@ -54,18 +63,6 @@ function normalizeIdentifier(value: string): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
-function validateUsername(username: string): string | null {
-  if (!username) {
-    return 'Identifiant et mot de passe requis';
-  }
-
-  if (username.length < 3) {
-    return "L'identifiant doit contenir au moins 3 caractères.";
-  }
-
-  return null;
-}
-
 export function createApp(dataSource: DataSource) {
   const app = express();
   const authenticate = createAuthMiddleware(dataSource);
@@ -97,40 +94,19 @@ export function createApp(dataSource: DataSource) {
   });
 
   const handleSignup = asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
-    const { username, email, password } = (req.body || {}) as {
-      username?: string;
-      email?: string;
-      password?: string;
-    };
-    const normalizedUsername = typeof username === 'string' ? username.trim() : '';
-    const normalizedEmail = typeof email === 'string' ? email.trim() : '';
-    const usernameError = validateUsername(normalizedUsername);
-    if (usernameError) {
-      res.status(400).json({ error: usernameError });
-      return;
-    }
+    const { username, email, password, organizationName } = req.body;
 
-    if (typeof password !== 'string' || password.length < 8) {
-      res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' });
-      return;
-    }
-
-    if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      res.status(400).json({ error: 'Adresse email invalide.' });
-      return;
-    }
-
-    const existingUser = await getUserRecordByIdentifier(dataSource, normalizedUsername);
+    const existingUser = await getUserRecordByIdentifier(dataSource, username);
     if (existingUser) {
       res.status(409).json({ error: "Ce nom d'utilisateur est déjà utilisé." });
       return;
     }
 
     const user = await createInitialAdmin(dataSource, {
-      username: normalizedUsername,
-      email: normalizedEmail || null,
+      username,
+      email: email || null,
       password,
-      organizationName: typeof req.body?.organizationName === 'string' ? req.body.organizationName.trim() : ''
+      organizationName: organizationName || '',
     });
 
     const token = createAuthToken(user.user);
@@ -142,22 +118,11 @@ export function createApp(dataSource: DataSource) {
     });
   });
 
-  app.post('/api/signup', handleSignup);
+  app.post('/api/signup', validate(signupSchema), handleSignup);
 
-  app.post('/api/login', asyncRoute(async (req: Request, res: Response) => {
-    const { username, email, password } = (req.body || {}) as {
-      username?: string;
-      email?: string;
-      password?: string;
-    };
-    const loginIdentifier = normalizeIdentifier(
-      typeof username === 'string' ? username : typeof email === 'string' ? email : ''
-    );
-
-    if (!loginIdentifier || !password) {
-      res.status(400).json({ error: 'Identifiant et mot de passe requis' });
-      return;
-    }
+  app.post('/api/login', validate(loginSchema), asyncRoute(async (req: Request, res: Response) => {
+    const { username, email, password } = req.body;
+    const loginIdentifier = normalizeIdentifier(username || email || '');
 
     const userRecord = await getUserRecordByIdentifier(dataSource, loginIdentifier);
     if (!userRecord) {
@@ -190,20 +155,8 @@ export function createApp(dataSource: DataSource) {
     });
   });
 
-  app.post('/api/auth/change-password', authenticate, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
-    const { currentPassword, newPassword } = (req.body || {}) as {
-      currentPassword?: string;
-      newPassword?: string;
-    };
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({ error: 'Current and new passwords are required.' });
-      return;
-    }
-
-    if (typeof newPassword !== 'string' || newPassword.length < 8) {
-      res.status(400).json({ error: 'The new password must be at least 8 characters long.' });
-      return;
-    }
+  app.post('/api/auth/change-password', authenticate, validate(changePasswordSchema), asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+    const { currentPassword, newPassword } = req.body;
 
     const result = await changePassword(dataSource, {
       userId: req.user!.id,
@@ -231,31 +184,18 @@ export function createApp(dataSource: DataSource) {
     res.json({ users });
   }));
 
-  app.post('/api/users', authenticate, requireOrganization, requirePasswordChanged, requireAdmin, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
-    const { username, email } = (req.body || {}) as { username?: string; email?: string };
-    const normalizedUsername = typeof username === 'string' ? username.trim() : '';
-    const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+  app.post('/api/users', authenticate, requireOrganization, requirePasswordChanged, requireAdmin, validate(createUserSchema), asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+    const { username, email } = req.body;
 
-    const validationError = validateUsername(normalizedUsername);
-    if (validationError) {
-      res.status(400).json({ error: validationError });
-      return;
-    }
-
-    if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      res.status(400).json({ error: 'Adresse email invalide.' });
-      return;
-    }
-
-    const existingUser = await getUserRecordByIdentifier(dataSource, normalizedUsername);
+    const existingUser = await getUserRecordByIdentifier(dataSource, username);
     if (existingUser) {
       res.status(409).json({ error: "Ce nom d'utilisateur est déjà utilisé." });
       return;
     }
 
     const result = await createUserWithTemporaryPassword(dataSource, {
-      username: normalizedUsername,
-      email: normalizedEmail || null,
+      username,
+      email: email || null,
       createdByUserId: req.user!.id,
       organizationId: req.user!.organizationId!
     });
@@ -283,13 +223,8 @@ export function createApp(dataSource: DataSource) {
     res.json(row);
   }));
 
-  app.put('/api/storage/:key', authenticate, requireOrganization, requirePasswordChanged, asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
-    const { value } = (req.body || {}) as { value?: string };
-    if (typeof value !== 'string') {
-      res.status(400).json({ error: 'Le champ "value" doit être une chaîne de caractères' });
-      return;
-    }
-
+  app.put('/api/storage/:key', authenticate, requireOrganization, requirePasswordChanged, validate(storagePutSchema), asyncRoute(async (req: AuthenticatedRequest, res: Response) => {
+    const { value } = req.body;
     const key = req.params.key as string;
     const record = await upsertStorageRecord(dataSource, {
       key,

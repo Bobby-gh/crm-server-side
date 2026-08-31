@@ -9,6 +9,8 @@ import { countUsers } from './services/users';
 
 async function bootstrap(): Promise<void> {
   await AppDataSource.initialize();
+  await AppDataSource.runMigrations();
+  console.log('Migrations applied successfully.');
 
   const app = createApp(AppDataSource);
   app.listen(PORT, HOST, async () => {

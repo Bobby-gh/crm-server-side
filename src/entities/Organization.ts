@@ -11,8 +11,8 @@ export class Organization {
   @PrimaryGeneratedColumn('increment')
   id!: number;
 
-  @Column({ type: 'text' })
-  name!: string;
+  @Column({ type: 'text', nullable: true })
+  name!: string | null;
 
   @Column({ type: 'text', unique: true })
   slug!: string;
@@ -29,7 +29,7 @@ export class Organization {
 
 export interface PublicOrganization {
   id: number;
-  name: string;
+  name: string | null;
   slug: string;
   createdByUserId: number | null;
   createdAt: Date;

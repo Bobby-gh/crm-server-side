@@ -35,6 +35,18 @@ export function createAuthMiddleware(dataSource: DataSource) {
       return;
     }
 
+    // Validate token version: if the passwordChangedAt in the token
+    // doesn't match the current user's, the token is stale (e.g. from
+    // a dropped-and-recreated database where IDs were reused).
+    const currentVersion = user.passwordChangedAt ? user.passwordChangedAt.toISOString() : '';
+    if (tokenPayload.v !== currentVersion) {
+      res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+      return;
+    }
+
     req.user = user;
     next();
   };

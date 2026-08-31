@@ -5,13 +5,15 @@ interface AuthTokenPayload {
   sub: number;
   username: string;
   exp: number;
+  v: string; // user version — passwordChangedAt timestamp used to invalidate tokens across DB resets
 }
 
-export function createAuthToken(user: { id: number; username: string }): string {
+export function createAuthToken(user: { id: number; username: string; passwordChangedAt: Date | null }): string {
   const payload: AuthTokenPayload = {
     sub: user.id,
     username: user.username,
-    exp: Date.now() + 12 * 60 * 60 * 1000
+    exp: Date.now() + 12 * 60 * 60 * 1000,
+    v: user.passwordChangedAt ? user.passwordChangedAt.toISOString() : ''
   };
 
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');

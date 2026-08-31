@@ -145,8 +145,14 @@ export function createApp(dataSource: DataSource) {
     });
   }));
 
-  app.post('/api/logout', authenticate, (_req: AuthenticatedRequest, res: Response) => {
-    res.json({ ok: true });
+  app.post('/api/logout', authenticate, (req: AuthenticatedRequest, res: Response) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+      }
+      res.clearCookie('connect.sid');
+      res.json({ ok: true });
+    });
   });
 
   app.get('/api/me', authenticate, (req: AuthenticatedRequest, res: Response) => {

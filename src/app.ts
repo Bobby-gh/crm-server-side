@@ -179,8 +179,10 @@ export function createApp(dataSource: DataSource) {
     }
 
     const refreshedUser = await getUserById(dataSource, req.user!.id);
+    const token = createAuthToken(refreshedUser!);
     res.json({
       user: refreshedUser,
+      token,
       message: 'Password updated successfully.'
     });
   }));
